@@ -1,5 +1,5 @@
 import { Contract } from "ethers";
-import { ethers } from "hardhat";
+import { ethers, network } from "hardhat";
 
 export async function setupUsers<
   T extends { [contractName: string]: Contract }
@@ -21,4 +21,49 @@ export async function setupUser<T extends { [contractName: string]: Contract }>(
     user[key] = contracts[key].connect(await ethers.getSigner(address));
   }
   return user as { address: string } & T;
+}
+
+export enum TimeUnits {
+  SECONDS = "seconds",
+  MINUTES = "minutes",
+  HOURS = "hours",
+  DAYS = "days",
+  WEEKS = "weeks",
+  MONTHS = "months",
+  YEARS = "years",
+}
+
+export function getTime(amount: number, unit: TimeUnits) {
+  let netTime: number;
+  switch (unit) {
+    case TimeUnits.SECONDS:
+      netTime = amount;
+      break;
+    case TimeUnits.MINUTES:
+      netTime = amount * 60;
+      break;
+    case TimeUnits.HOURS:
+      netTime = amount * 60 * 60;
+      break;
+    case TimeUnits.DAYS:
+      netTime = amount * 60 * 60 * 24;
+      break;
+    case TimeUnits.WEEKS:
+      netTime = amount * 60 * 60 * 24 * 7;
+      break;
+    case TimeUnits.MONTHS:
+      netTime = amount * 60 * 60 * 24 * 30;
+      break;
+    case TimeUnits.YEARS:
+      netTime = amount * 60 * 60 * 24 * 365;
+      break;
+    default:
+      throw "invalid time unit";
+  }
+  return netTime;
+}
+export async function advanceTime(amount: number, unit: TimeUnits) {
+  const netTime = getTime(amount, unit);
+  await network.provider.send("evm_increaseTime", [netTime]);
+  await network.provider.send("evm_mine");
 }
