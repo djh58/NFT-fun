@@ -17,6 +17,7 @@ contract RingNFT is ERC721, ERC721URIStorage, ERC721Burnable {
         address proposee;
         string message;
         uint256 mintCost;
+        uint256 deadline;
     }
 
     address devWallet;
@@ -27,8 +28,12 @@ contract RingNFT is ERC721, ERC721URIStorage, ERC721Burnable {
 
     event NewlyWed(address proposer, address proposee, string message, uint256 blockNum, uint256 time);
 
-    function propose(address _proposee, string calldata _message) external payable returns (bytes32) {
-        Proposal memory proposal = Proposal(msg.sender, _proposee, _message, msg.value);
+    function propose(
+        address _proposee,
+        string calldata _message,
+        uint256 deadline
+    ) external payable returns (bytes32) {
+        Proposal memory proposal = Proposal(msg.sender, _proposee, _message, msg.value, deadline);
         bytes32 proposalId = keccak256(abi.encode(msg.sender, _proposee, _message, msg.value));
         proposals[proposalId] = proposal;
         // like a ring, don't lost it! not storing it in the contract
@@ -38,16 +43,33 @@ contract RingNFT is ERC721, ERC721URIStorage, ERC721Burnable {
     function reject(bytes32 _proposalId) external {
         Proposal memory proposal = proposals[_proposalId];
         require(proposal.proposee != msg.sender, "Wrong person!");
-        payable(proposal.proposer).transfer(proposal.mintCost);
-        delete proposals[_proposalId];
+        require(block.timestamp <= proposal.deadline, "Too late");
+        _cancelProposal(proposal.proposer, proposal.mintCost, _proposalId);
     }
 
     function accept(bytes32 _proposalId) external {
         Proposal memory proposal = proposals[_proposalId];
         require(proposal.proposee == msg.sender, "Wrong person!");
+        require(block.timestamp <= proposal.deadline, "Too late");
         revenue += proposal.mintCost;
         _safeMint(msg.sender, uint256(_proposalId));
         emit NewlyWed(proposal.proposer, proposal.proposee, proposal.message, block.number, block.timestamp);
+    }
+
+    function renege(bytes32 _proposalId) external {
+        Proposal memory proposal = proposals[_proposalId];
+        require(block.timestamp >= proposal.deadline, "Too soon");
+        require(proposal.proposer == msg.sender, "Wrong person!");
+        _cancelProposal(proposal.proposer, proposal.mintCost, _proposalId);
+    }
+
+    function _cancelProposal(
+        address proposer,
+        uint256 cost,
+        bytes32 id
+    ) internal {
+        payable(proposer).transfer(cost);
+        delete proposals[id];
     }
 
     function withdraw() external {
